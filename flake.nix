@@ -12,6 +12,10 @@
       url = "github:yhirose/cpp-httplib?ref=v0.46.0";
       flake = false;
     };
+    # nlohmann_json = {
+    #   url = "https://github.com/nlohmann/json/releases/download/v3.12.0/json.tar.xz";
+    #   flake = false;
+    # };
   };
 
   outputs =
@@ -30,7 +34,7 @@
           # to allow for rust-rover to be installed
           config.allowUnfreePredicate =
             pkg:
-            builtins.elem (lib.getName pkg) [
+            builtins.elem (pkgs.lib.getName pkg) [
               "rust-rover"
             ];
         };
@@ -39,27 +43,9 @@
           src = httplib;
         });
 
-        inherit (pkgs) lib;
-        getFetchContentFlags =
-          file:
-          let
-            inherit (builtins) head elemAt match;
-            parse = match "(.*)\nFetchContent_Declare\\(\n  ([^\n]*)\n([^)]*)\\).*" file;
-            name = elemAt parse 1;
-            content = elemAt parse 2;
-            getKey = key: elemAt (match "(.*\n)?  ${key} ([^\n]*)(\n.*)?" content) 1;
-            url = getKey "GIT_REPOSITORY";
-            pkg = pkgs.fetchFromGitHub {
-              owner = head (match ".*github.com/([^/]*)/.*" url);
-              repo = head (match ".*/([^/]*)\\.git" url);
-              rev = getKey "GIT_TAG";
-              hash = getKey "# hash:";
-            };
-          in
-          if (parse == null) then
-            [ ]
-          else
-            ([ "-DFETCHCONTENT_SOURCE_DIR_${lib.toUpper name}=${pkg}" ] ++ getFetchContentFlags (head parse));
+        toCMakeFlag =
+          { name, pkg }:
+          "-DFETCHCONTENT_SOURCE_DIR_${name}=${pkg}";
 
         # https://gitlab.com/openjowelsofts/huenicorn/-/tree/0c3910ab43a64b87755ab500fbae9378376efb46/#dependencies-intallation
         buildDependencies = with pkgs; [
@@ -86,7 +72,20 @@
 
           nativeBuildInputs = buildDependencies;
 
-          cmakeFlags = getFetchContentFlags (builtins.readFile ./CMakeLists.txt);
+          cmakeFlags = builtins.map toCMakeFlag [
+            {
+              name = "nlohmann_json";
+              pkg = pkgs.nlohmann_json;
+            }
+            {
+              name = "cpp_httplib";
+              pkg = newerHttpLib;
+            }
+            {
+              name = "glm";
+              pkg = pkgs.glm;
+            }
+          ];
 
           src = openjowelsofts-huenicorn;
 
