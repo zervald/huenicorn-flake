@@ -27,9 +27,12 @@
       let
         pkgs = (import nixpkgs) {
           inherit system;
-
           # to allow for rust-rover to be installed
-          config.allowUnfree = true;
+          config.allowUnfreePredicate =
+            pkg:
+            builtins.elem (lib.getName pkg) [
+              "rust-rover"
+            ];
         };
         newerHttpLib = pkgs.httplib.overrideAttrs (old: {
           version = "0.46.0";
