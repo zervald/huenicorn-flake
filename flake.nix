@@ -39,6 +39,28 @@
           src = httplib;
         });
 
+        inherit (pkgs) lib;
+        getFetchContentFlags =
+          file:
+          let
+            inherit (builtins) head elemAt match;
+            parse = match "(.*)\nFetchContent_Declare\\(\n  ([^\n]*)\n([^)]*)\\).*" file;
+            name = elemAt parse 1;
+            content = elemAt parse 2;
+            getKey = key: elemAt (match "(.*\n)?  ${key} ([^\n]*)(\n.*)?" content) 1;
+            url = getKey "GIT_REPOSITORY";
+            pkg = pkgs.fetchFromGitHub {
+              owner = head (match ".*github.com/([^/]*)/.*" url);
+              repo = head (match ".*/([^/]*)\\.git" url);
+              rev = getKey "GIT_TAG";
+              hash = getKey "# hash:";
+            };
+          in
+          if (parse == null) then
+            [ ]
+          else
+            ([ "-DFETCHCONTENT_SOURCE_DIR_${lib.toUpper name}=${pkg}" ] ++ getFetchContentFlags (head parse));
+
         # https://gitlab.com/openjowelsofts/huenicorn/-/tree/0c3910ab43a64b87755ab500fbae9378376efb46/#dependencies-intallation
         buildDependencies = with pkgs; [
           curl
@@ -63,6 +85,8 @@
           name = "huenicorn";
 
           nativeBuildInputs = buildDependencies;
+
+          cmakeFlags = getFetchContentFlags (builtins.readFile ./CMakeLists.txt);
 
           src = openjowelsofts-huenicorn;
 
